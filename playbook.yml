@@ -1,0 +1,94 @@
+---
+- hosts: mydroplet
+  vars_files:
+    - vars.yml
+  gather_facts: no
+  tasks:
+    - name: Get Droplet ID
+      set_fact:
+        droplet_id: "{{ lookup('file', '.vagrant/machines/mydroplet/digital_ocean/id') }}"
+      delegate_to: localhost
+
+    - name: Debug
+      debug:
+        msg: "Droplet ID: {{ droplet_id }}"
+
+    - name: Create/Update volume
+      digital_ocean_block_storage:
+        state: "{{ volume_state }}"
+        command: create
+        api_token: "{{ dokey }}"
+        region: "{{ block_region }}"
+        block_size: "{{ block_size }}"
+        volume_name: "{{ volume_name }}-{{ item }}"
+        description: "vagrant-{{ item }}"
+      with_sequence: count="{{ block_count | int }}"
+      tags: volume_create
+
+    - name: Attach volume
+      digital_ocean_block_storage:
+        state: present
+        command: attach
+        api_token: "{{ dokey }}"
+        volume_name: "{{ volume_name }}-{{ item }}"
+        region: "{{ block_region }}"
+        droplet_id: "{{ droplet_id }}"
+      with_sequence: count="{{ block_count | int }}"
+      when: volume_state == 'present'
+      tags: volume_attach
+
+    - name: Gather facts
+      setup:
+
+    - name: Get Block Storage devices
+      set_fact:
+        disks: "{{ disks | default([]) }} + ['{{ item.key }}']"
+      with_dict: "{{ ansible_devices }}"
+      when: item.value.links.ids
+      tags: info
+
+    - name: Create partition
+      parted:
+        device: "/dev/{{ item }}"
+        number: 1
+        state: present
+        label: gpt
+        name: "vagrant-{{ item }}"
+      with_items: "{{ disks }}"
+      when: disks is defined
+      tags: partition
+
+    - name: Gather facts
+      setup:
+
+    - name: Get Partitions
+      set_fact:
+        partitions: "{{ partitions | default([]) | combine(item.value.partitions)}}"
+      with_dict: "{{ ansible_devices }}"
+      when: item.value.links.ids
+      tags: info
+
+    - name: Create filesystem
+      filesystem:
+        fstype: "{{ fstype }}"
+        dev: "/dev/{{ item }}"
+      with_items: "{{ partitions }}"
+      when: partitions is defined
+      tags: fs
+
+    - name: Create dict with mount points and partitions
+      set_fact:
+        binding: "{{ binding | default([]) + [dict(mount=item[0], disk=item[1])] }}"
+      loop: "{{ mount_points | zip(partitions) | list }}"
+      when: partitions is defined
+      tags: mount
+
+    - name: Mount
+      mount:
+        path: "{{ item.mount }}"
+        src: "/dev/{{ item.disk }}"
+        fstype: "{{ fstype }}"
+        state: "{{ mount_state }}"
+      loop: "{{ binding }}"
+      when: binding is defined
+      tags: mount
