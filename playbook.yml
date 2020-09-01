@@ -1,12 +1,12 @@
 ---
-- hosts: mydroplet
+- hosts: all
   vars_files:
     - vars.yml
   gather_facts: no
   tasks:
     - name: Get Droplet ID
       set_fact:
-        droplet_id: "{{ lookup('file', '.vagrant/machines/mydroplet/digital_ocean/id') }}"
+        droplet_id: "{{ lookup('file', '.vagrant/machines/{{ inventory_hostname }}/digital_ocean/id') }}"
       delegate_to: localhost
 
     - name: Debug
