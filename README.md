@@ -17,13 +17,13 @@ vagrant plugin install vagrant-digitalocean
 # your DigitalOcean API Token:
 dokey: "TOKEN"
 
-# Volumes count (must be equal with <mount_points> count)
+# Volumes count (must be equal to <mount_points> list length)
 block_count: 1
 # Volumes size in GB
 block_size: 50
 # Region
 block_region: fra1
-# Volume name (will be appended with index of the block storage)
+# Volume name (will be supplemented by index of the block storage)
 volume_name: myvolume
 # State: present for create or absent for remove
 volume_state: present
